@@ -113,6 +113,17 @@ function has_theme_header($dir) {
     return (stripos($head, 'Theme Name:') !== false);
 }
 
+/** โฟลเดอร์ "ซากสำรอง/เปลี่ยนชื่อทิ้ง" — ไม่ใช่ธีมที่ใช้งานจริง จึงข้ามไม่นับเป็นปัญหา
+ *  เช่น blocksy_broken_20260603, blocksy.bak, theme-old, twentytwenty_backup
+ *  (กดซ่อมไม่ได้อยู่แล้วเพราะไม่มีธีมชื่อนี้จริง — เป็นแค่ของที่คนซ่อมเปลี่ยนชื่อทิ้งไว้) */
+function is_backup_leftover($name) {
+    $n = strtolower($name);
+    if (preg_match('/(^|[._-])(broken|bak|backup|old|orig|disabled?|copy|save|tmp|temp|unused)([._-]|$)/', $n)) return true;
+    if (preg_match('/[._-]\d{6,8}$/', $n)) return true;            // ลงท้ายด้วยวันที่ เช่น _20260603
+    if (preg_match('/[._-]\d{4}-\d{2}-\d{2}$/', $n)) return true;  // เช่น _2026-06-03
+    return false;
+}
+
 /** เช็คไฟล์หลักที่จำเป็นของ parent theme (blocksy)
  *  parent theme เต็มต้องมี: style.css, index.php, functions.php
  *  คืนค่า: array ของไฟล์ที่ "ขาด" (ว่าง = ครบทุกไฟล์) */
@@ -141,6 +152,9 @@ function find_theme_dirs($root, $maxdepth, $progress) {
         if ($dh === false) continue;
         while (($entry = readdir($dh)) !== false) {
             if ($entry === '.' || $entry === '..') continue;
+            // ข้ามโฟลเดอร์ซ่อน/ระบบที่ขึ้นต้นด้วยจุด (เช่น .cpanel/ea-php-cli ที่ cPanel
+            // สร้าง "เงา" wp-content/themes ไว้ มีแต่ไฟล์ cache → เคยตรวจเจอ "ธีมว่าง" หลอก)
+            if (substr($entry, 0, 1) === '.') continue;
             $path = "$dir/$entry";
             if (!is_dir($path) || is_link($path)) continue;
             // เจอ wp-content/themes → เก็บ แล้วไม่ไต่ลงต่อ
@@ -225,6 +239,14 @@ foreach ($theme_dirs as $tdir) {
         if (in_array($name, $EXCLUDE, true)) {
             if (!$AS_CSV && !$ONLY_ISSUES) {
                 printf("  %-8s %-7s %-9s %s\n", 'ข้าม', '-', '-', $name);
+            }
+            continue;
+        }
+
+        // โฟลเดอร์ซากสำรอง/เปลี่ยนชื่อทิ้ง → ข้าม ไม่นับเป็นปัญหา (กันแจ้งผิด + กดซ่อมไม่ได้)
+        if (is_backup_leftover($name)) {
+            if (!$AS_CSV && !$ONLY_ISSUES) {
+                printf("  %-8s %-7s %-9s %s\n", 'ข้าม(สำรอง)', '-', '-', $name);
             }
             continue;
         }
